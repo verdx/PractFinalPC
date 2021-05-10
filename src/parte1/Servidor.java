@@ -10,10 +10,10 @@ public class Servidor extends Thread {
 	ServerSocket listen;
 	
 	
-	public Servidor(BaseDeDatos bd) {
+	public Servidor(BaseDeDatos bd, int port) {
 		this.bd = bd;
 		try {
-			listen = new ServerSocket(500);
+			listen = new ServerSocket(port);
 		} catch (IOException e) {
 			System.out.println("Ha habido algún fallo al iniciar el servidor de escucha.");
 			e.printStackTrace();
@@ -22,7 +22,8 @@ public class Servidor extends Thread {
 
 	public void run() {
 		Socket s;
-		while(true) {
+		for(int i = 0; i < 10;i++) {
+			System.out.println("Vuelta " + i + " del servidor");
 			try {
 				s = listen.accept();
 			} catch (IOException e) {
@@ -32,7 +33,6 @@ public class Servidor extends Thread {
 			}
 			Thread conexion = new ThreadConexion(s, bd);
 			conexion.run();
-			
 		}
 	}
 }
