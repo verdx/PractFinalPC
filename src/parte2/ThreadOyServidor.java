@@ -49,6 +49,7 @@ public class ThreadOyServidor extends Thread {
 				System.out.println("Problema recibiendo el mensaje en el os del cliente " + username);
 				e.printStackTrace();
 			}
+			System.out.println("Mensaje recibido");
 			
 			switch(m.getTipo()) {
 			case MENSAJE_CONFIRMACION_CONEXION:

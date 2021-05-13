@@ -26,7 +26,8 @@ public class Cliente extends Thread {
 	
 	Scanner stdin;
 	
-	String host;
+	String myhost;
+	String serverhost;
 	int port;
 	
 	String username;
@@ -34,10 +35,11 @@ public class Cliente extends Thread {
 	
 	boolean exit;
 	
-	public Cliente(int port, String[] filenames) {
+	public Cliente(String[] filenames) {
+		
 		try(final DatagramSocket socket = new DatagramSocket()){
 		  socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
-		  host = socket.getLocalAddress().getHostAddress();
+		  myhost = socket.getLocalAddress().getHostAddress();
 		} catch (UnknownHostException | SocketException e) {
 			System.out.println("Fallo al conseguir la IP");
 		}
@@ -59,11 +61,19 @@ public class Cliente extends Thread {
 		stdin = new Scanner(System.in);
 		username = stdin.nextLine();
 		
+		System.out.print("Host: ");
+		stdin = new Scanner(System.in);
+		serverhost = stdin.nextLine();
+		
+		System.out.print("Port: ");
+		stdin = new Scanner(System.in);
+		port = Integer.parseInt(stdin.nextLine());
+		
 		System.out.println("Iniciado el cliente " + username);
 		
 		// Creamos y activamos el socket y el stream de salida
 		try {
-			s = new Socket(host, port);
+			s = new Socket(serverhost, port);
 			fout = new ObjectOutputStream(s.getOutputStream());
 		} catch (IOException e) {
 			System.out.println("No se ha podido conectar con el servidor.");
@@ -188,7 +198,7 @@ public class Cliente extends Thread {
 		emisor.start();
 		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
 		try {
-			fout.writeObject(new MensajeEmisorPreparadoCS(host, port + 1, user_receptor));
+			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, port + 1, user_receptor));
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al mandar mensaje para conectarse p2p");
@@ -207,8 +217,8 @@ public class Cliente extends Thread {
 	}
 
 
-	public void recibirArchivo(String host, int port) {
-		Receptor receptor = new Receptor(host, port);
+	public void recibirArchivo(String myhost, int port) {
+		Receptor receptor = new Receptor(myhost, port);
 		receptor.start();
 	}
 	
