@@ -40,6 +40,7 @@ public class Servidor extends Thread {
 				e.printStackTrace();
 				break;
 			}
+			System.out.println("Comenzando thread oyente");
 			ThreadOyCliente conexion = new ThreadOyCliente(s, bd);
 			conexion.start();
 		}

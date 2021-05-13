@@ -43,6 +43,8 @@ public class ThreadOyCliente extends Thread {
 	
 	public void run() {
 		while(true) {
+			
+			System.out.println("Comenzado thread oyente");
 			Mensaje m = null;
 			try {
 				m = (Mensaje) fin.readObject();
@@ -52,6 +54,7 @@ public class ThreadOyCliente extends Thread {
 				closeAll();
 			}
 			
+			System.out.println("Mensaje Recibido");
 			switch(m.getTipo()) {
 			case MENSAJE_CONEXION:
 				addUser(((MensajeConexion) m).getUsername(), ((MensajeConexion) m).getFiles());
