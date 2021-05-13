@@ -7,6 +7,11 @@ import java.nio.file.Files;
 
 public class FileContents implements Serializable{
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	
 	String filename;
 	byte[] contents;
 	

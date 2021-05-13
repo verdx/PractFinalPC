@@ -6,9 +6,6 @@ import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
-
-
-
 public class BaseDeDatos {
 	Map<String, String[]> files;
 	Map<String, Pair<ObjectInputStream, ObjectOutputStream>> streams;
@@ -21,7 +18,7 @@ public class BaseDeDatos {
 		
 	}
 	
-	public void addUser(String username, String[] filenames, ObjectInputStream in, ObjectOutputStream out) {
+	public synchronized void addUser(String username, String[] filenames, ObjectInputStream in, ObjectOutputStream out) {
 		files.put(username, filenames);
 		streams.put(username, new Pair<>(in, out));
 		for(String s: filenames) {
@@ -29,26 +26,26 @@ public class BaseDeDatos {
 		}
 	}
 	
-	public void removeUser(String username) {
+	public synchronized void removeUser(String username) {
 		files.remove(username);
 		streams.remove(username);
 	}
 	
-	public String[] getUsers() {
+	public synchronized String[] getUsers() {
 		String[] users = (String[]) files.keySet().toArray();
 		return users;
 	}
 	
-	public ObjectOutputStream getUserFout(String user) {
+	public synchronized ObjectOutputStream getUserFout(String user) {
 		return streams.get(user).second();
 	}
 	
-	public String getOwner(String filename) {
+	public synchronized String getOwner(String filename) {
 		return owners.get(filename);
 	}
 	
 	
-	public Map<String, String[]> getFiles() {
+	public synchronized Map<String, String[]> getFiles() {
 		return files;
 	}
 

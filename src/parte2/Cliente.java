@@ -15,7 +15,6 @@ import java.util.Scanner;
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
 import mensajes.MensajeEmisorPreparadoCS;
-import mensajes.MensajeEmitirFichero;
 import mensajes.MensajeListaUsuarios;
 import mensajes.MensajePedirFichero;
 
@@ -35,22 +34,29 @@ public class Cliente extends Thread {
 	
 	boolean exit;
 	
-	public Cliente(String host, int port) {
+	public Cliente(int port, String[] filenames) {
 		try(final DatagramSocket socket = new DatagramSocket()){
 		  socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
 		  host = socket.getLocalAddress().getHostAddress();
 		} catch (UnknownHostException | SocketException e) {
 			System.out.println("Fallo al conseguir la IP");
 		}
+		initializeFiles(filenames);
 
+	}
+	
+	private void initializeFiles(String[] filenames) {
+		for(String s: filenames) {
+			files.add(new File(s));
+		}
 	}
 
 	
 	public void run() {
 		
 		// Leer el nombre del usuario
-		stdin = new Scanner(System.in);
 		System.out.print("Username: ");
+		stdin = new Scanner(System.in);
 		username = stdin.nextLine();
 		
 		System.out.println("Iniciado el cliente " + username);
@@ -60,7 +66,7 @@ public class Cliente extends Thread {
 			s = new Socket(host, port);
 			fout = new ObjectOutputStream(s.getOutputStream());
 		} catch (IOException e) {
-			System.out.println("No se ha podido crear el Socket para el cliente " + username);
+			System.out.println("No se ha podido conectar con el servidor.");
 			e.printStackTrace();
 			return;
 		}
