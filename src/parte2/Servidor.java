@@ -1,4 +1,4 @@
-package parte1;
+package parte2;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -31,7 +31,7 @@ public class Servidor extends Thread {
 				e.printStackTrace();
 				break;
 			}
-			Thread conexion = new ThreadConexion(s, bd);
+			ThreadOyCliente conexion = new ThreadOyCliente(s, bd);
 			conexion.start();
 		}
 	}

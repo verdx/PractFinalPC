@@ -1,21 +1,21 @@
 package parte1;
 
+import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.Scanner;
 
 public class ThreadConexion extends Thread {
 	
 	Socket s;
 	BaseDeDatos bd;
 	File file;
-	Scanner fileReader;
-	Scanner streamReader;
+	OutputStream fout;
+	InputStream fin;
+	DataInputStream strin;
 	
 	public ThreadConexion(Socket s, BaseDeDatos bd) {
 		this.s = s;
@@ -27,53 +27,64 @@ public class ThreadConexion extends Thread {
 		System.out.println("Iniciado un thread de escucha");
 		
 		// Creamos los canales de comunicacion con el cliente
-		OutputStream fout;
-		InputStream fin;
 		try {
 			fout = s.getOutputStream();
 			fin = s.getInputStream();
 		} catch (IOException e) {
 			System.out.println("Ha habido algún fallo al conseguir los streams de input y output.");
 			e.printStackTrace();
+			closeAll();
 			return;
 		}
 		
-		//Recibimos del cliente el nombre del archivo que busca
-		streamReader = new Scanner(fin);
-		String fn = streamReader.hasNext() ? streamReader.next() : "";
-		
+		// Recibimos string 
+		strin = new DataInputStream(fin);
+		String fn;
+		try {
+			fn = strin.readUTF();
+		} catch (IOException e1) {
+			System.out.println("Problemas al recibir el filename");
+			e1.printStackTrace();
+			closeAll();
+			return;
+		}
 		System.out.println("Se ha recibido el string " + fn);
 		
-		//Creamos un stream de lectura del archivo de la base de datos
-//		FileInputStream fin_file = null;
-//		try {
-//			fin_file = new FileInputStream(bd.readFile(fn));
-//		} catch (FileNotFoundException e) {
-//			System.out.println("No existe el archivo que se busca");
-//			e.printStackTrace();
-//			return;
-//		}
-//		
-//		byte[] bytes = new byte[16*1024];
-//
-//        int count;
-//        try {
-//			while ((count = fin_file.read(bytes)) > 0) {
-//			    fout.write(bytes, 0, count);
-//			}
-//		} catch (IOException e) {
-//			System.out.println("Fallo al transmitir el archivo");
-//		}
+		//Creamos un stream para mandar el fichero
+		ObjectOutputStream objout;
+		try {
+			objout = new ObjectOutputStream(fout);
+		} catch (IOException e) {
+			System.out.println("Fallo al crear el stream de objetos");
+			e.printStackTrace();
+			closeAll();
+			return;
+		}
+		
+		//Mandamos el archivo
+		try {
+			objout.writeObject(bd.readFile(fn));
+			objout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al mandar el fichero por el stream de objetos");
+			e.printStackTrace();
+			closeAll();
+			return;
+		}
 
-        try {
+		closeAll();
+        
+	}
+	
+	private void closeAll() {
+		try {
 			fout.close();
 			fin.close();
-	        //fin_file.close();
 	        s.close();
+	        strin.close();
 		} catch (IOException e) {
 			System.out.println("Fallo al cerrar los streams o el socket");
 			e.printStackTrace();
-		}
-        
+		}   
 	}
 }
