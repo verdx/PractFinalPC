@@ -1,6 +1,8 @@
 package mensajes;
 
-public abstract class Mensaje {
+import java.io.Serializable;
+
+public abstract class Mensaje implements Serializable{
 	public MensType getTipo() {
 		return tipo;
 	}

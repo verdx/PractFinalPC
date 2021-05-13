@@ -1,17 +1,20 @@
 package parte2;
 
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.net.Socket;
 
 import mensajes.Mensaje;
+import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
+import mensajes.MensajeConfCerrarConexion;
 import mensajes.MensajeConfConexion;
+import mensajes.MensajeEmisorPreparadoCS;
+import mensajes.MensajeEmisorPreparadoSC;
+import mensajes.MensajeEmitirFichero;
+import mensajes.MensajePedirFichero;
 
 public class ThreadOyCliente extends Thread {
 	
@@ -51,18 +54,68 @@ public class ThreadOyCliente extends Thread {
 			
 			switch(m.getTipo()) {
 			case MENSAJE_CONEXION:
-				bd.addUser(((MensajeConexion) m).getUsername(), ((MensajeConexion) m).getFiles(), fin, fout);
-				try {
-					fout.writeObject(new MensajeConfConexion());
-				} catch (IOException e) {
-					System.out.println("Fallo al envias mensaje de confirmacion de conexion");
-					e.printStackTrace();
-				}
+				addUser(((MensajeConexion) m).getUsername(), ((MensajeConexion) m).getFiles());
+				break;
+			case MENSAJE_CERRAR_CONEXION:
+				removeUser(((MensajeCerrarConexion) m).getUsername());
+				break;
+			case MENSAJE_PEDIR_FICHERO:
+				pedirFichero(((MensajePedirFichero) m).getFilename(), ((MensajePedirFichero) m).getUser());
+			case MENSAJE_PREPARADO_EMISORCS:
+				emisorPreparado(((MensajeEmisorPreparadoCS) m).getUser(), ((MensajeEmisorPreparadoCS) m).getHost(), 
+						((MensajeEmisorPreparadoCS) m).getPort());
+			default:
+				break;
 				
 				
 			}
 		}
         
+	}
+	
+	private void addUser(String username, String[] files) {
+		bd.addUser(username, files , fin, fout);
+		try {
+			fout.writeObject(new MensajeConfConexion());
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al enviar mensaje de confirmacion de conexion");
+			e.printStackTrace();
+		}
+	}
+	
+	private void removeUser(String username) {
+		bd.removeUser(username);
+		try {
+			fout.writeObject(new MensajeConfCerrarConexion());
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al enviar mensaje de confirmacion de conexion");
+			e.printStackTrace();
+		}
+	}
+	
+	private void pedirFichero(String filename, String user) {
+		ObjectOutputStream auxout = bd.getUserFout(bd.getOwner(filename));
+		try {
+			auxout.writeObject(new MensajeEmitirFichero(filename, user));
+			auxout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al enviar mensaje de confirmacion de conexion");
+			e.printStackTrace();
+		}
+	}
+	
+	private void emisorPreparado(String user, String host, int port) {
+		ObjectOutputStream auxout= bd.getUserFout(user);
+		try {
+			auxout.writeObject(new MensajeEmisorPreparadoSC(host, port));
+			auxout.flush();
+		} catch (IOException e) {
+			System.out.println("Problema al mandas MensajeEmisorPreparado del servidor al cliente receptor");
+			e.printStackTrace();
+		}
+		
 	}
 	
 	private void closeAll() {
