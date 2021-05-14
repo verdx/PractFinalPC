@@ -50,6 +50,7 @@ public class Cliente extends Thread {
 	public Cliente() {
 		//Conseguimos nuestra IP
 		conseguirIP();
+		
 	}
 	
 	private void conseguirIP() {
@@ -62,11 +63,16 @@ public class Cliente extends Thread {
 	}
 	
 	private void initializeFiles(String[] filenames) {
-		System.out.println("Añadiendo archivos.");
 		for(String s: filenames) {
 			files.add(new File(s));
-			System.out.println("Añadido el archivo: " + s);
 		}
+	}
+	
+	private void pedirArchivos() {
+		System.out.print("Introduzca una lista con los archivos que desee subir: ");
+		stdin = new Scanner(System.in);
+		String[] filenames = stdin.nextLine().split(" ");
+		initializeFiles(filenames);
 	}
 
 	
@@ -84,6 +90,8 @@ public class Cliente extends Thread {
 		System.out.print("Port: ");
 		stdin = new Scanner(System.in);
 		port = Integer.parseInt(stdin.nextLine());
+		
+		pedirArchivos();
 		
 		// Creamos y activamos el socket y el stream de salida
 		try {
@@ -192,7 +200,7 @@ public class Cliente extends Thread {
 	
 	private void exit() {
 		// We ask for confirmation
-		System.out.println("Are you sure you want to leave?[y/N]> ");
+		System.out.print("Are you sure you want to leave?[y/N]> ");
 		String conf = stdin.nextLine();
 		if(conf != "y" && conf != "Y") {
 			exit = true;
@@ -208,7 +216,7 @@ public class Cliente extends Thread {
 			try {
 				os.join();
 			} catch (InterruptedException e) {
-				System.out.println("Problem al cerrar el oyente");
+				System.out.println("Problema al cerrar el oyente");
 				e.printStackTrace();
 			}
 		}
@@ -216,6 +224,9 @@ public class Cliente extends Thread {
 	
 	public void emitirArchivo(String filename, String user_receptor) {
 		File file = getFile(filename);
+		if(file == null) {
+			System.out.println("El fichero no parece existir");
+		};
 		Emisor emisor = new Emisor(port + 1, file);
 		emisor.start();
 		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
@@ -231,7 +242,7 @@ public class Cliente extends Thread {
 	
 	private File getFile(String filename) {
 		for(File f: files) {
-			if(f.getPath() == filename) {
+			if(f.getName() == filename) {
 				return f;
 			}
 		}

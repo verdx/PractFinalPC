@@ -6,6 +6,7 @@ public class MensajeEmitirFichero extends Mensaje{
 	String user;
 	
 	public MensajeEmitirFichero(String filename, String user) {
+		this.tipo = MensType.MENSAJE_EMITIR_FICHERO;
 		this.filename = filename;
 		this.user = user;
 	}

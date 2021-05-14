@@ -52,27 +52,31 @@ public class ThreadOyServidor extends Thread {
 				e.printStackTrace();
 			}
 			
-			switch(m.getTipo()) {
-			case MENSAJE_CONFIRMACION_CONEXION:
-				System.out.println("Se ha establecido la conexión con el servidor.");
-				break;
-			case MENSAJE_CONFIRMACION_LISTA_USUARIOS:
-				printUsers(((MensajeConfListaUsuarios) m).getUsers());
-				break;
-			case MENSAJE_CONFIRMACION_LISTA_ARCHIVOS:
-				printFiles(((MensajeConfListaArchivos) m).getArchivos());
-				break;
-			case MENSAJE_EMITIR_FICHERO:
-				cliente.emitirArchivo(((MensajeEmitirFichero) m).getFilename(), ((MensajeEmitirFichero) m).getUser());
-				break;
-			case MENSAJE_PREPARADO_EMISORSC:
-				cliente.recibirArchivo(((MensajeEmisorPreparadoSC) m).getHost(), ((MensajeEmisorPreparadoSC) m).getPort());
-				break;
-			case MENSAJE_CONFIRMACION_CERRAR_CONEXION:
-				System.out.println("Saliendo del sistema");
-				exit = true;
-			default:
-				break;	
+			if(m == null) {
+				System.out.println("No se ha recibido correctamente el mensaje");
+			} else  {
+				switch(m.getTipo()) {
+				case MENSAJE_CONFIRMACION_CONEXION:
+					System.out.println("Se ha establecido la conexión con el servidor.");
+					break;
+				case MENSAJE_CONFIRMACION_LISTA_USUARIOS:
+					printUsers(((MensajeConfListaUsuarios) m).getUsers());
+					break;
+				case MENSAJE_CONFIRMACION_LISTA_ARCHIVOS:
+					printFiles(((MensajeConfListaArchivos) m).getArchivos());
+					break;
+				case MENSAJE_EMITIR_FICHERO:
+					cliente.emitirArchivo(((MensajeEmitirFichero) m).getFilename(), ((MensajeEmitirFichero) m).getUser());
+					break;
+				case MENSAJE_PREPARADO_EMISORSC:
+					cliente.recibirArchivo(((MensajeEmisorPreparadoSC) m).getHost(), ((MensajeEmisorPreparadoSC) m).getPort());
+					break;
+				case MENSAJE_CONFIRMACION_CERRAR_CONEXION:
+					System.out.println("Saliendo del sistema");
+					exit = true;
+				default:
+					break;	
+				} 
 			}
 		}
 		return;
