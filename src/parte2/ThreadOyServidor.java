@@ -21,7 +21,10 @@ public class ThreadOyServidor extends Thread {
 	
 	Cliente cliente;
 	
+	boolean exit;
+	
 	public ThreadOyServidor(Socket s, String username, Cliente cliente) {
+		exit = false;
 		this.s = s;
 		this.username = username;
 		this.cliente = cliente;
@@ -35,13 +38,12 @@ public class ThreadOyServidor extends Thread {
 			closeAll();
 			return;
 		}
-		System.out.println("Se han creado los canales del cliente " + username);
 
 	}
 
 	public void run()  {
 		
-		while(true) {
+		while(!exit) {
 			Mensaje m = null;
 			try {
 				m = (Mensaje) fin.readObject();
@@ -49,42 +51,43 @@ public class ThreadOyServidor extends Thread {
 				System.out.println("Problema recibiendo el mensaje en el os del cliente " + username);
 				e.printStackTrace();
 			}
-			System.out.println("Mensaje recibido");
 			
 			switch(m.getTipo()) {
 			case MENSAJE_CONFIRMACION_CONEXION:
 				System.out.println("Se ha establecido la conexión con el servidor.");
 				break;
-			
 			case MENSAJE_CONFIRMACION_LISTA_USUARIOS:
 				printUsers(((MensajeConfListaUsuarios) m).getUsers());
 				break;
 			case MENSAJE_CONFIRMACION_LISTA_ARCHIVOS:
 				printFiles(((MensajeConfListaArchivos) m).getArchivos());
+				break;
 			case MENSAJE_EMITIR_FICHERO:
 				cliente.emitirArchivo(((MensajeEmitirFichero) m).getFilename(), ((MensajeEmitirFichero) m).getUser());
+				break;
 			case MENSAJE_PREPARADO_EMISORSC:
 				cliente.recibirArchivo(((MensajeEmisorPreparadoSC) m).getHost(), ((MensajeEmisorPreparadoSC) m).getPort());
+				break;
 			case MENSAJE_CONFIRMACION_CERRAR_CONEXION:
 				System.out.println("Saliendo del sistema");
+				exit = true;
 			default:
-				break;
-			
-			
+				break;	
 			}
 		}
+		return;
 	}
 	
 	private void printUsers(String[] users) {
-		System.out.println("Users:");
+		System.out.println("\nUsers:");
 		for(String s: users) {
-			System.out.println("  >" + s);
+			System.out.println("-" + s);
 		}
 	}
 	
 	private void printFiles(Map<String, String[]> files) {
 		for(String user: files.keySet()) {
-			System.out.println(user + ": ");
+			System.out.println("\n" + user + ": ");
 			for(String file: files.get(user)) {
 				System.out.println("  \u2514" + file);
 			}
@@ -100,7 +103,5 @@ public class ThreadOyServidor extends Thread {
 			System.out.println("Fallo al cerrar los streams o el socket en el cliente " + username);
 			e.printStackTrace();
 		}
-
 	}
-
 }

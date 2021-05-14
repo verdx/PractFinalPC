@@ -11,10 +11,12 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.Semaphore;
 
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
 import mensajes.MensajeEmisorPreparadoCS;
+import mensajes.MensajeListaArchivos;
 import mensajes.MensajeListaUsuarios;
 import mensajes.MensajePedirFichero;
 
@@ -33,30 +35,44 @@ public class Cliente extends Thread {
 	String username;
 	List<File> files = new ArrayList<>();
 	
+	Semaphore keyboard_sem;
+	
 	boolean exit;
 	
 	public Cliente(String[] filenames) {
+		// Conseguimos nuestra IP
+		conseguirIP();
 		
+		// Abrimos los archivos que nos pasen 
+		initializeFiles(filenames);
+	}
+	
+	public Cliente() {
+		//Conseguimos nuestra IP
+		conseguirIP();
+	}
+	
+	private void conseguirIP() {
 		try(final DatagramSocket socket = new DatagramSocket()){
-		  socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
-		  myhost = socket.getLocalAddress().getHostAddress();
+			socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+			myhost = socket.getLocalAddress().getHostAddress();
 		} catch (UnknownHostException | SocketException e) {
 			System.out.println("Fallo al conseguir la IP");
 		}
-		initializeFiles(filenames);
-
 	}
 	
 	private void initializeFiles(String[] filenames) {
+		System.out.println("Añadiendo archivos.");
 		for(String s: filenames) {
 			files.add(new File(s));
+			System.out.println("Añadido el archivo: " + s);
 		}
 	}
 
 	
 	public void run() {
 		
-		// Leer el nombre del usuario
+		// Leer el nombre del usuario y el puerto e ip al que conectarnos
 		System.out.print("Username: ");
 		stdin = new Scanner(System.in);
 		username = stdin.nextLine();
@@ -69,8 +85,6 @@ public class Cliente extends Thread {
 		stdin = new Scanner(System.in);
 		port = Integer.parseInt(stdin.nextLine());
 		
-		System.out.println("Iniciado el cliente " + username);
-		
 		// Creamos y activamos el socket y el stream de salida
 		try {
 			s = new Socket(serverhost, port);
@@ -80,7 +94,6 @@ public class Cliente extends Thread {
 			e.printStackTrace();
 			return;
 		}
-		System.out.println("Conectado el socket del cliente " + username);
 		
 		// Creamos y lanzamos el thread de escucha oyente-servidor
 		os = new ThreadOyServidor(s, username, this);
@@ -89,7 +102,7 @@ public class Cliente extends Thread {
 		// Mandamos el mensaje de conexion establecida con la info del cliente
 		String[] filenames = new String[files.size()];
 		for(File f: files) {
-			filenames[files.indexOf(f)] = f.getPath();
+			filenames[files.indexOf(f)] = f.getName();
 		}
 		try {
 			fout.writeObject(new MensajeConexion(username, filenames));
@@ -103,7 +116,7 @@ public class Cliente extends Thread {
 		exit = false;
 		System.out.println("Type help for info on the commands.");
 		while(!exit) {
-			System.out.println(username + ">");
+			System.out.print(username + "> ");
 			String[] command = stdin.nextLine().split(" ");
 			switch(command[0]) {
 			case "help":
@@ -130,6 +143,7 @@ public class Cliente extends Thread {
 				System.out.println("Command not recognized. Type help or h for help.");
 			}
 		}
+		return;
 	}
 	
 	private void help() {
@@ -156,7 +170,7 @@ public class Cliente extends Thread {
 		// Mandamos un mensaje pidiendo la lista de archivos con sus respectivos usuarios
 		// La respuesta se escribirá desde el Oyente-Servidor cuando llegue.
 		try {
-			fout.writeObject(new MensajeListaUsuarios());
+			fout.writeObject(new MensajeListaArchivos());
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("No se ha podido mandar el mensaje, inténtelo de nuevo");
@@ -165,6 +179,8 @@ public class Cliente extends Thread {
 	}
 	
 	private void download(String filename) {
+		// Mandamos un mensaje comenzando el proceso de conexion para descargar 
+		// un archivo de otro peer
 		try {
 			fout.writeObject(new MensajePedirFichero(filename, username));
 			fout.flush();
@@ -176,7 +192,7 @@ public class Cliente extends Thread {
 	
 	private void exit() {
 		// We ask for confirmation
-		System.out.println("Are you sure you want to leave?[y/N]\n>");
+		System.out.println("Are you sure you want to leave?[y/N]> ");
 		String conf = stdin.nextLine();
 		if(conf != "y" && conf != "Y") {
 			exit = true;
@@ -187,6 +203,12 @@ public class Cliente extends Thread {
 				fout.flush();
 			} catch (IOException e) {
 				System.out.println("No se ha podido cerrar la conexión, inténtelo de nuevo");
+				e.printStackTrace();
+			}
+			try {
+				os.join();
+			} catch (InterruptedException e) {
+				System.out.println("Problem al cerrar el oyente");
 				e.printStackTrace();
 			}
 		}

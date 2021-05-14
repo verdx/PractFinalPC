@@ -5,12 +5,15 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Map;
 
 import mensajes.Mensaje;
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
 import mensajes.MensajeConfCerrarConexion;
 import mensajes.MensajeConfConexion;
+import mensajes.MensajeConfListaArchivos;
+import mensajes.MensajeConfListaUsuarios;
 import mensajes.MensajeEmisorPreparadoCS;
 import mensajes.MensajeEmisorPreparadoSC;
 import mensajes.MensajeEmitirFichero;
@@ -42,9 +45,9 @@ public class ThreadOyCliente extends Thread {
 
 	
 	public void run() {
-		while(true) {
-			
-			System.out.println("Comenzado thread oyente");
+		System.out.println("Comenzado thread oyente del servidor");
+		boolean exit = false; //El bucle se acaba cuando el usuario se sale
+		while(!exit) {
 			Mensaje m = null;
 			try {
 				m = (Mensaje) fin.readObject();
@@ -54,19 +57,26 @@ public class ThreadOyCliente extends Thread {
 				closeAll();
 			}
 			
-			System.out.println("Mensaje Recibido");
 			switch(m.getTipo()) {
 			case MENSAJE_CONEXION:
 				addUser(((MensajeConexion) m).getUsername(), ((MensajeConexion) m).getFiles());
 				break;
 			case MENSAJE_CERRAR_CONEXION:
 				removeUser(((MensajeCerrarConexion) m).getUsername());
+				exit = true;
 				break;
 			case MENSAJE_PEDIR_FICHERO:
 				pedirFichero(((MensajePedirFichero) m).getFilename(), ((MensajePedirFichero) m).getUser());
+				break;
 			case MENSAJE_PREPARADO_EMISORCS:
 				emisorPreparado(((MensajeEmisorPreparadoCS) m).getUser(), ((MensajeEmisorPreparadoCS) m).getHost(), 
 						((MensajeEmisorPreparadoCS) m).getPort());
+				break;
+			case MENSAJE_LISTA_USUARIOS:
+				pedirUsuarios();
+				break;
+			case MENSAJE_LISTA_ARCHIVOS:
+				pedirArchivos();
 			default:
 				break;
 				
@@ -76,6 +86,29 @@ public class ThreadOyCliente extends Thread {
         
 	}
 	
+	private void pedirUsuarios() {
+		String[] users = bd.getUsers();
+		try {
+			fout.writeObject(new MensajeConfListaUsuarios(users));
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al enviar mensaje de confirmacion con la lista de usuarios");
+			e.printStackTrace();
+		}
+	}
+	
+	private void pedirArchivos() {
+		Map<String, String[]> files = bd.getFiles();
+		try {
+			fout.writeObject(new MensajeConfListaArchivos(files));
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Fallo al enviar mensaje de confirmacion con la lista de usuarios");
+			e.printStackTrace();
+		}
+	}
+
+
 	private void addUser(String username, String[] files) {
 		bd.addUser(username, files , fin, fout);
 		try {

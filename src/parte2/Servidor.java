@@ -1,8 +1,12 @@
 package parte2;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.Scanner;
 
 public class Servidor extends Thread {
@@ -11,10 +15,20 @@ public class Servidor extends Thread {
 	ServerSocket listen;
 	
 	int port;
+	String myip;
 	
 	
 	public Servidor(BaseDeDatos bd) {
 		this.bd = bd;
+		
+		// Conseguimos nuestra IP
+		try(final DatagramSocket socket = new DatagramSocket()){
+			socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+			myip = socket.getLocalAddress().getHostAddress();
+			System.out.println("IP: " + myip);
+		} catch (UnknownHostException | SocketException e) {
+			System.out.println("Fallo al conseguir la IP");
+		}
 	}
 
 	public void run() {
