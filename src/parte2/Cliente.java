@@ -2,6 +2,7 @@ package parte2;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
+import mensajes.MensType;
+import mensajes.Mensaje;
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
 import mensajes.MensajeEmisorPreparadoCS;
@@ -22,27 +25,26 @@ import mensajes.MensajePedirFichero;
 
 public class Cliente extends Thread {
 	
-	Socket s;
-	ObjectOutputStream fout;
-	ThreadOyServidor os;
+	private Socket s;
+	private ObjectOutputStream fout;
+	private ObjectInputStream fin;
+	private OyenteCliente os;
 	
-	Scanner stdin;
+	private Scanner stdin;
 	
-	String myhost;
-	String serverhost;
-	int port;
-	int portout;
+	private String myhost;
+	private String serverhost;
+	private int port;
+	private int portout;
 	
-	String username;
-	List<File> files = new ArrayList<>();
+	private String username;
+	private List<File> files = new ArrayList<>();
 	
-	Semaphore keyboard_sem;
-	
+	private Semaphore input_sem;
 	boolean exit;
 	
 	public Cliente(String[] filenames) {
-		// Conseguimos nuestra IP
-		conseguirIP();
+		this();
 		
 		// Abrimos los archivos que nos pasen 
 		initializeFiles(filenames);
@@ -51,45 +53,21 @@ public class Cliente extends Thread {
 	public Cliente() {
 		//Conseguimos nuestra IP
 		conseguirIP();
-		
+
+		stdin = new Scanner(System.in);	
+
+		input_sem = new Semaphore(1);
 	}
 	
-	private void conseguirIP() {
-		try(final DatagramSocket socket = new DatagramSocket()){
-			socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
-			myhost = socket.getLocalAddress().getHostAddress();
-		} catch (UnknownHostException | SocketException e) {
-			System.out.println("Fallo al conseguir la IP");
-		}
-	}
-	
-	private void initializeFiles(String[] filenames) {
-		for(String s: filenames) {
-			files.add(new File(s));
-		}
-	}
-	
-	private void pedirArchivos() {
-		System.out.print("Introduzca una lista con los archivos que desee subir: ");
-		stdin = new Scanner(System.in);
-		String[] filenames = stdin.nextLine().split(" ");
-		initializeFiles(filenames);
-	}
 
 	
 	public void run() {
 		
-		// Leer el nombre del usuario y el puerto e ip al que conectarnos
-		System.out.print("Username: ");
-		stdin = new Scanner(System.in);
-		username = stdin.nextLine();
-		
+		// Leemos el puerto e ip al que conectarnos
 		System.out.print("Host: ");
-		stdin = new Scanner(System.in);
 		serverhost = stdin.nextLine();
 		
 		System.out.print("Port: ");
-		stdin = new Scanner(System.in);
 		port = Integer.parseInt(stdin.nextLine());
 		portout = port +1;
 		
@@ -99,33 +77,68 @@ public class Cliente extends Thread {
 		try {
 			s = new Socket(serverhost, port);
 			fout = new ObjectOutputStream(s.getOutputStream());
+			fin = new ObjectInputStream(s.getInputStream());
 		} catch (IOException e) {
-			System.out.println("No se ha podido conectar con el servidor.");
-			e.printStackTrace();
+			System.out.println("No se ha podido conectar con el servidor: " + e.getLocalizedMessage());
 			return;
+		}
+
+		boolean usuario_registrado = false;
+
+		while(!usuario_registrado) {
+			System.out.print("Username: ");
+			username = stdin.nextLine();
+
+			// Mandamos el mensaje de conexion establecida con la info del cliente
+			String[] filenames = new String[files.size()];
+			for(File f: files) {
+				filenames[files.indexOf(f)] = f.getName();
+			}
+			try {
+				fout.writeObject(new MensajeConexion(username, filenames));
+				fout.flush();
+			} catch (IOException e) {
+				System.out.println("Fallo al mandar mensaje de conexion: " + e.getLocalizedMessage());
+			}
+
+			// Recibimos la respuesta del servidor
+			Mensaje m = null;
+			try {
+				m = (Mensaje) fin.readObject();
+			} catch (ClassNotFoundException | IOException e) {
+				System.out.println("Problema al recibir el mensaje :" + e.getLocalizedMessage());
+			}
+			if(m == null ) {
+				System.out.println("No se ha recibido el mensaje de confirmacion de conexion, pruebe de nuevo");
+			} else if (m.getTipo() == MensType.MENSAJE_USUARIO_COGIDO) {
+				System.out.println("Ya hay otro usuario con ese nombre, prueba con otro.");
+			} else {
+				usuario_registrado = true;
+				System.out.println("Usuario registrado.");
+			}
 		}
 		
 		// Creamos y lanzamos el thread de escucha oyente-servidor
-		os = new ThreadOyServidor(s, username, this);
-		os.start();
-		
-		// Mandamos el mensaje de conexion establecida con la info del cliente
-		String[] filenames = new String[files.size()];
-		for(File f: files) {
-			filenames[files.indexOf(f)] = f.getName();
-		}
 		try {
-			fout.writeObject(new MensajeConexion(username, filenames));
-			fout.flush();
-		} catch (IOException e) {
-			System.out.println("Fallo al mandar mensaje de conexion desde cliente " + username);
-			e.printStackTrace();
+			os = new OyenteCliente(fin, username, this, input_sem);
+			os.start();
+		} catch(Exception e) {
+			System.out.println("Fallo de conexion con el servidor: " + e.getLocalizedMessage());
+			return;
 		}
+		
+		
+		
 		
 		// Entramos en el menu y pedimos comandos hasta que se salga
 		exit = false;
 		System.out.println("Type help for info on the commands.");
 		while(!exit) {
+			try {
+				input_sem.acquire();
+			} catch (InterruptedException e) {
+				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+			}
 			System.out.print(username + "> ");
 			String[] command = stdin.nextLine().split(" ");
 			switch(command[0]) {
@@ -152,17 +165,24 @@ public class Cliente extends Thread {
 			default:
 				System.out.println("Command not recognized. Type help or h for help.");
 			}
+			input_sem.release();
 		}
 		return;
 	}
 	
 	private void help() {
 		// Se imprime el mensaje de ayuda explicando los comandos
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+		}
 		System.out.println("[h]elp: This message.\n"
 				+ "[u]sers: List the users in the system.\n"
 				+ "[f]iles: List the available files in the system.\n"
 				+ "[d]ownload FILENAME: Download FILENAME from the system.\n"
 				+ "[e]xit: Exit the system.");
+		input_sem.release();
 	}
 	
 	private void users() {
@@ -171,8 +191,12 @@ public class Cliente extends Thread {
 			fout.writeObject(new MensajeListaUsuarios());
 			fout.flush();
 		} catch (IOException e) {
-			System.out.println("No se ha podido mandar el mensaje, inténtelo de nuevo");
-			e.printStackTrace();
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
@@ -183,8 +207,12 @@ public class Cliente extends Thread {
 			fout.writeObject(new MensajeListaArchivos());
 			fout.flush();
 		} catch (IOException e) {
-			System.out.println("No se ha podido mandar el mensaje, inténtelo de nuevo");
-			e.printStackTrace();
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
@@ -195,8 +223,12 @@ public class Cliente extends Thread {
 			fout.writeObject(new MensajePedirFichero(filename, username));
 			fout.flush();
 		} catch (IOException e) {
-			System.out.println("No se ha podido mandar el mensaje, inténtelo de nuevo");
-			e.printStackTrace();
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
@@ -204,6 +236,7 @@ public class Cliente extends Thread {
 		// We ask for confirmation
 		System.out.print("Are you sure you want to leave?[y/N]> ");
 		String conf = stdin.nextLine();
+		input_sem.release();
 		if(conf != "y" && conf != "Y") {
 			exit = true;
 			
@@ -212,14 +245,29 @@ public class Cliente extends Thread {
 				fout.writeObject(new MensajeCerrarConexion(username));
 				fout.flush();
 			} catch (IOException e) {
-				System.out.println("No se ha podido cerrar la conexión, inténtelo de nuevo");
-				e.printStackTrace();
+				System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
 			}
 			try {
 				os.join();
 			} catch (InterruptedException e) {
-				System.out.println("Problema al cerrar el oyente");
-				e.printStackTrace();
+				System.out.println("Problema al cerrar el oyente: " + e.getLocalizedMessage());
+			}
+			
+			stdin.close();
+			try {
+				fout.close();
+			} catch (IOException e) {
+				System.out.println("Problema al cerrar el canal de salida: " + e.getLocalizedMessage());
+			}
+			try {
+				fin.close();
+			} catch (IOException e) {
+				System.out.println("Problema al cerrar el canal de entrada: " + e.getLocalizedMessage());
+			}
+			try {
+				s.close();
+			} catch (IOException e) {
+				System.out.println("Problema al cerrar el socket: " + e.getLocalizedMessage());
 			}
 		}
 	}
@@ -228,17 +276,33 @@ public class Cliente extends Thread {
 		File file = getFile(filename);
 		if(file == null) {
 			System.out.println("El fichero no parece existir");
-		};
-		Emisor emisor = new Emisor(portout, file);
-		emisor.start();
+		}
+		
+		boolean puerto_correcto = false;
+		Emisor emisor = null;
+		
+		while(!puerto_correcto) {
+			puerto_correcto = true;
+			try {
+				emisor = new Emisor(portout, file);
+				emisor.start();
+			} catch(Exception e) {
+				puerto_correcto = false;
+			}
+			portout += 1;
+		}
+		
 		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
 		try {
-			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, portout, user_receptor));
-			portout += 1;
+			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, portout - 1, user_receptor));
 			fout.flush();
 		} catch (IOException e) {
-			System.out.println("Problema al mandar mensaje para conectarse p2p");
-			e.printStackTrace();
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			emisor.join();
+		} catch (InterruptedException e) {
+			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
 		}
 		
 	}
@@ -249,7 +313,7 @@ public class Cliente extends Thread {
 				return f;
 			}
 		}
-		System.out.println("getFile no ha encontrado el archivo.");
+		System.out.println("No se ha encontrado el archivo.");
 		return null;
 	}
 
@@ -257,6 +321,51 @@ public class Cliente extends Thread {
 	public void recibirArchivo(String myhost, int port) {
 		Receptor receptor = new Receptor(myhost, port);
 		receptor.start();
+		try {
+			receptor.join();
+		} catch (InterruptedException e) {
+			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
+		}
+		System.out.println("Archivo recibido.");
+		input_sem.release();
+	}
+	
+	private void conseguirIP() {
+		try(final DatagramSocket socket = new DatagramSocket()){
+			socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+			myhost = socket.getLocalAddress().getHostAddress();
+			socket.close();
+		} catch (UnknownHostException | SocketException e) {
+			System.out.println("Fallo al conseguir la IP: " + e.getLocalizedMessage());
+		}
+	}
+	
+	private void initializeFiles(String[] filenames) {
+		//Añadimos los archivos
+		for(String s: filenames) {
+			files.add(new File(s));
+		}
+		for(File f:files) {
+			if(!f.canRead()) {
+				System.out.println("No se ha podido encontrar el archivo: " + f.getName());
+			}
+		}
+	}
+	
+	private void pedirArchivos() {
+		System.out.println("Introduzca los archivos de uno en uno, termine con ENTER: ");
+		String in;
+		File aux;
+		in = stdin.nextLine();
+		while(!in.equals("")) {
+			aux = new File(in);
+			if(aux.canRead()) {
+				files.add(aux);
+			} else {
+				System.out.println("No se ha podido encontrar el archivo: " + aux.getName());
+			}
+			in = stdin.nextLine();
+		}
 	}
 	
 	

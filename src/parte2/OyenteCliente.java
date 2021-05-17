@@ -2,9 +2,8 @@ package parte2;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.net.Socket;
 import java.util.Map;
-
+import java.util.concurrent.Semaphore;
 
 import mensajes.Mensaje;
 import mensajes.MensajeConfListaArchivos;
@@ -12,33 +11,21 @@ import mensajes.MensajeConfListaUsuarios;
 import mensajes.MensajeEmisorPreparadoSC;
 import mensajes.MensajeEmitirFichero;
 
-public class ThreadOyServidor extends Thread {
+public class OyenteCliente extends Thread {
 
-	String username;
+	private ObjectInputStream fin;
 	
-	Socket s;
-	ObjectInputStream fin;
+	private Cliente cliente;
 	
-	Cliente cliente;
+	private boolean exit;
 	
-	boolean exit;
+	private Semaphore input_sem;
 	
-	public ThreadOyServidor(Socket s, String username, Cliente cliente) {
+	public OyenteCliente(ObjectInputStream fin, String username, Cliente cliente, Semaphore input_sem) {
 		exit = false;
-		this.s = s;
-		this.username = username;
 		this.cliente = cliente;
-		
-		// Creamos el canal de escucha y el de salida para el servidor
-		try {
-			fin = new ObjectInputStream(s.getInputStream());
-		} catch (IOException e) {
-			System.out.println("Ha habido algún fallo al conseguir los streams de input y output del cliente " + username);
-			e.printStackTrace();
-			closeAll();
-			return;
-		}
-
+		this.fin = fin;
+		this.input_sem = input_sem;
 	}
 
 	public void run()  {
@@ -48,22 +35,20 @@ public class ThreadOyServidor extends Thread {
 			try {
 				m = (Mensaje) fin.readObject();
 			} catch (ClassNotFoundException | IOException e) {
-				System.out.println("Problema recibiendo el mensaje en el os del cliente " + username);
-				e.printStackTrace();
+				System.out.println("Problema al recibir el mensaje :" + e.getLocalizedMessage());
 			}
 			
 			if(m == null) {
 				System.out.println("No se ha recibido correctamente el mensaje");
 			} else  {
 				switch(m.getTipo()) {
-				case MENSAJE_CONFIRMACION_CONEXION:
-					System.out.println("Se ha establecido la conexión con el servidor.");
-					break;
 				case MENSAJE_CONFIRMACION_LISTA_USUARIOS:
 					printUsers(((MensajeConfListaUsuarios) m).getUsers());
+					input_sem.release();
 					break;
 				case MENSAJE_CONFIRMACION_LISTA_ARCHIVOS:
 					printFiles(((MensajeConfListaArchivos) m).getArchivos());
+					input_sem.release();
 					break;
 				case MENSAJE_EMITIR_FICHERO:
 					cliente.emitirArchivo(((MensajeEmitirFichero) m).getFilename(), ((MensajeEmitirFichero) m).getUser());
@@ -74,7 +59,13 @@ public class ThreadOyServidor extends Thread {
 				case MENSAJE_CONFIRMACION_CERRAR_CONEXION:
 					System.out.println("Saliendo del sistema");
 					exit = true;
+					break;
+				case MENSAJE_ARCHIVO_NO_EXISTE:
+					System.out.println("El archivo no existe");
+					input_sem.release();
+					break;
 				default:
+					System.out.println("Ha llegado un mensaje desconocido de tipo: " + m.getTipo());
 					break;	
 				} 
 			}
@@ -83,7 +74,7 @@ public class ThreadOyServidor extends Thread {
 	}
 	
 	private void printUsers(String[] users) {
-		System.out.println("\nUsers:");
+		System.out.println("Users:");
 		for(String s: users) {
 			System.out.println("-" + s);
 		}
@@ -91,21 +82,10 @@ public class ThreadOyServidor extends Thread {
 	
 	private void printFiles(Map<String, String[]> files) {
 		for(String user: files.keySet()) {
-			System.out.println("\n" + user + ": ");
+			System.out.println("-" + user + ": ");
 			for(String file: files.get(user)) {
-				System.out.println("  \u2514" + file);
+				System.out.println("  \u2514" + file + "\n");
 			}
-		}
-	}
-	
-
-	private void closeAll() {
-		try {
-			fin.close();
-			s.close();
-		} catch (IOException e) {
-			System.out.println("Fallo al cerrar los streams o el socket en el cliente " + username);
-			e.printStackTrace();
 		}
 	}
 }

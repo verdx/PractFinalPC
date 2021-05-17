@@ -56,7 +56,6 @@ public class Receptor extends Thread {
 		Path path = Paths.get(System.getProperty("user.dir") + "/" + fileabs.getFilename());
 		try {
 			Files.write(path, fileabs.getContents());
-			System.out.println("Escribiendo archivo...");
 		} catch (IOException e) {
 			System.out.println("Problem writing the file");
 			e.printStackTrace();

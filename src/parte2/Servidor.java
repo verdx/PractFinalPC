@@ -27,35 +27,39 @@ public class Servidor extends Thread {
 			myip = socket.getLocalAddress().getHostAddress();
 			System.out.println("IP: " + myip);
 		} catch (UnknownHostException | SocketException e) {
-			System.out.println("Fallo al conseguir la IP");
+			System.out.println("Fallo al conseguir la IP: " + e.getLocalizedMessage());
 		}
 	}
 
 	public void run() {
 		Socket s;
 		
+		// Pedimos el puerto
 		System.out.print("Puerto: ");
 		Scanner stdin = new Scanner(System.in);
 		port = Integer.parseInt(stdin.nextLine());
 		stdin.close();
+		
+
+		// Abrimos el socket servidor
 		try {
 			listen = new ServerSocket(port);
 		} catch (IOException e) {
-			System.out.println("Ha habido algún fallo al iniciar el servidor de escucha.");
-			e.printStackTrace();
+			System.out.println("Problema al iniciar el socket de escucha del servidor: " + e.getLocalizedMessage());
 		}
 		
-		for(int i = 0; i < 10;i++) {
-			System.out.println("Vuelta " + i + " del servidor");
+		// Iniciamos el bucle de espera para clientes
+		while(true) {
+			System.out.println("Esperando a un cliente");
 			try {
 				s = listen.accept();
+				System.out.println("Ha llegado un cliente.");
 			} catch (IOException e) {
-				System.out.println("Ha habido algún fallo al empezar la escucha.");
-				e.printStackTrace();
+				System.out.println("Problema al empezar la escucha: " + e.getLocalizedMessage());
 				break;
 			}
 			
-			ThreadOyCliente conexion = new ThreadOyCliente(s, bd);
+			OyenteServidor conexion = new OyenteServidor(s, bd);
 			conexion.start();
 		}
 	}

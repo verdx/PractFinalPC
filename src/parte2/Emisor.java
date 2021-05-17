@@ -16,17 +16,12 @@ public class Emisor extends Thread {
 	
 	File file;
 	
-	public Emisor(int port, File file) {
+	public Emisor(int port, File file) throws IOException {
 		this.file = file;
 		this.port = port;
 		
 		// Creamos el servidor en el puerto dado
-		try {
-			server = new ServerSocket(port);
-		} catch (IOException e) {
-			System.out.println("Problema al crear el ServerSocket del emisor");
-			e.printStackTrace();
-		}
+		server = new ServerSocket(port);
 	}
 	
 	public void run() {

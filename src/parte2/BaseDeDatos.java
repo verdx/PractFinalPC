@@ -35,27 +35,36 @@ public class BaseDeDatos {
 		
 	}
 	
-	public synchronized void addUser(String username, String[] filenames, ObjectInputStream in, ObjectOutputStream out) {
-		System.out.println("Añadiendo al usuario: " + username);
+	public synchronized boolean addUser(String username, String[] filenames, ObjectInputStream in, ObjectOutputStream out) {
+		monfiles.request_read();
+		boolean ya_existe = files.containsKey(username);
+		monfiles.release_read();
 		
-		// Añadimos la info a files
-		monfiles.request_write();
-		files.put(username, filenames);
-		monfiles.release_write();
-		
-		// Añadimos la info a streams
-		monstreams.request_write();
-		streams.put(username, new Pair<>(in, out));
-		monstreams.release_write();
-		
-		// Añadimos la info a owners
-		monowners.request_write();
-		for(String s: filenames) {
-			owners.put(s, username);
+		if(ya_existe) {
+			return false;
+		} else {
+
+			// Añadimos la info a files
+			monfiles.request_write();
+			files.put(username, filenames);
+			monfiles.release_write();
+
+			// Añadimos la info a streams
+			monstreams.request_write();
+			streams.put(username, new Pair<>(in, out));
+			monstreams.release_write();
+
+			// Añadimos la info a owners
+			monowners.request_write();
+			for(String s: filenames) {
+				owners.put(s, username);
+			}
+			monowners.release_write();
+
+			System.out.println("Se ha añadido correctamente el usuario: " + username);
+			
+			return true;
 		}
-		monowners.release_write();
-		
-		System.out.println("Se ha añadido correctamente el usuario: " + username);
 	}
 	
 	public synchronized void removeUser(String username) {
