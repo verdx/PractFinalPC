@@ -43,7 +43,7 @@ public class Receptor extends Thread {
 			e.printStackTrace();
 		}
 		
-		// Mandamos el archivo por el stream
+		// Recibimos el archivo por el stream
 		FileContents fileabs = null;
 		try {
 			fileabs = (FileContents) fin.readObject();
@@ -53,13 +53,15 @@ public class Receptor extends Thread {
 		}
 		
 		// Guardamos el archivo
-		Path path = Paths.get(System.getProperty("user.dir") + fileabs.getFilename());
+		Path path = Paths.get(System.getProperty("user.dir") + "/" + fileabs.getFilename());
 		try {
 			Files.write(path, fileabs.getContents());
+			System.out.println("Escribiendo archivo...");
 		} catch (IOException e) {
 			System.out.println("Problem writing the file");
 			e.printStackTrace();
 		}
+		return;
 	}
 
 }

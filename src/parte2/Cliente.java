@@ -31,6 +31,7 @@ public class Cliente extends Thread {
 	String myhost;
 	String serverhost;
 	int port;
+	int portout;
 	
 	String username;
 	List<File> files = new ArrayList<>();
@@ -90,6 +91,7 @@ public class Cliente extends Thread {
 		System.out.print("Port: ");
 		stdin = new Scanner(System.in);
 		port = Integer.parseInt(stdin.nextLine());
+		portout = port +1;
 		
 		pedirArchivos();
 		
@@ -227,11 +229,12 @@ public class Cliente extends Thread {
 		if(file == null) {
 			System.out.println("El fichero no parece existir");
 		};
-		Emisor emisor = new Emisor(port + 1, file);
+		Emisor emisor = new Emisor(portout, file);
 		emisor.start();
 		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
 		try {
-			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, port + 1, user_receptor));
+			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, portout, user_receptor));
+			portout += 1;
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al mandar mensaje para conectarse p2p");
@@ -242,10 +245,11 @@ public class Cliente extends Thread {
 	
 	private File getFile(String filename) {
 		for(File f: files) {
-			if(f.getName() == filename) {
+			if(f.getName().equals(filename)) {
 				return f;
 			}
 		}
+		System.out.println("getFile no ha encontrado el archivo.");
 		return null;
 	}
 

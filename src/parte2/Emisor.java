@@ -58,6 +58,7 @@ public class Emisor extends Thread {
 			System.out.println("Problema al mandar el archivo por el stream de salida del emisor");
 			e.printStackTrace();
 		}
+		return;
 	}
 
 }
