@@ -21,7 +21,6 @@ public class BaseDeDatos {
 	MonitorRW monstreams;
 	
 	// Diccionario de archivos y sus dueños y su monitor
-	// Si un archivo lo tienen varios usuarios, solo aparece el último añadido
 	Map<String, String> owners;
 	MonitorRW monowners;
 	
@@ -175,8 +174,6 @@ public class BaseDeDatos {
 			oktowrite.signal();
 			oktoread.signalAll();
 			l.unlock();
-		}
-		
-		
+		}	
 	}
 }
