@@ -1,3 +1,4 @@
+
 package mensajes;
 
 public enum MensType {

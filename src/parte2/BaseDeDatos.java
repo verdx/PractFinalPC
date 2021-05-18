@@ -127,7 +127,7 @@ public class BaseDeDatos {
 	class MonitorRW {
 		
 		private int nr, nw;
-		private Lock l;
+		private final Lock l;
 		private final Condition oktowrite, oktoread;
 		
 		public MonitorRW() {
