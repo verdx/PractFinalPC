@@ -90,8 +90,9 @@ public class OyenteCliente extends Thread {
 		for(String user: map.keySet()) {
 			System.out.println("-" + user + ": ");
 			for(String file: map.get(user)) {
-				System.out.println("  \u2514" + file + "\n");
+				System.out.println("  \u2514" + file);
 			}
+			System.out.println("");
 		}
 	}
 }

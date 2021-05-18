@@ -10,7 +10,6 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
@@ -47,13 +46,6 @@ public class Cliente extends Thread {
 	private Semaphore input_sem;
 	private Lock files_lock;
 	boolean exit;
-	
-	public Cliente(String[] filenames) {
-		this();
-		
-		// Abrimos los archivos que nos pasen 
-		initializeFiles(filenames);
-	}
 	
 	public Cliente() {
 		//Conseguimos nuestra IP
@@ -157,6 +149,7 @@ public class Cliente extends Thread {
 				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 			}
 			System.out.print(username + "> ");
+			input_sem.release();
 			String[] command = stdin.nextLine().split(" ");
 			switch(command[0]) {
 			case "help":
@@ -173,20 +166,23 @@ public class Cliente extends Thread {
 				break;
 			case "download":
 			case "d":
-				download(command[1]);
+				if(command.length < 2) {
+					System.out.println("Falta el argumento FILE");
+				} else {
+					download(command[1]);
+				}
 				break;
 			case "exit":
 			case "e":
 				exit();
 				break;
 			case "upload":
-			case "ul":
-				upload();
+			case "up":
+				upload(command);
 				break;
 			default:
 				System.out.println("Command not recognized. Type help or h for help.");
 			}
-			input_sem.release();
 		}
 		return;
 	}
@@ -202,6 +198,7 @@ public class Cliente extends Thread {
 				+ "[u]sers: List the users in the system.\n"
 				+ "[f]iles: List the available files in the system.\n"
 				+ "[d]ownload FILENAME: Download FILENAME from the system.\n"
+				+ "[up]load FILENAME: Download FILENAME from the system if given or ask for files to upload.\n"
 				+ "[e]xit: Exit the system.");
 		input_sem.release();
 	}
@@ -247,34 +244,67 @@ public class Cliente extends Thread {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
 		}
 		try {
-			input_sem.acquire();
+			input_sem.acquire(); 
 		} catch (InterruptedException e) {
 			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
-	private void upload() {
+	private void upload(String[] command) {
+		List<File> filesout;
+		File aux;
+		if(command.length == 1) {
+			filesout = introducirArchivos();
+		} else {
+			filesout = new ArrayList<File>();
+			for(int i = 1; i < command.length; i++) {
+				aux = new File(command[i]);
+				if(aux.canRead()) {
+					filesout.add(aux);
+				}
+			}
+		} 
+		addFiles(filesout, false);
+	}
+	
+	public void addFiles(List<File> filesin, boolean testigo) {	
+		List<String> in = new ArrayList<String>();
+		
+		files_lock.lock();
+		for(File f: filesin) {
+			files.add(f);
+			in.add(f.getName());
+		}
+		files_lock.unlock();
+		
 		try {
-			fout.writeObject(new MensajeSubirArchivos(introducirArchivos()));
+			
+			fout.writeObject(new MensajeSubirArchivos(in));
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
 		}
-		try {
-			input_sem.acquire();
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+		if(!testigo) {
+			try {
+				input_sem.acquire();
+			} catch (InterruptedException e) {
+				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+			}
 		}
 	}
-
 
 	private void exit() {
 		// We ask for confirmation
 		System.out.print("Are you sure you want to leave?[y/N]> ");
 		String conf = stdin.nextLine();
-		input_sem.release();
 		if(conf != "y" && conf != "Y") {
 			exit = true;
+			
+			try {
+				input_sem.acquire();
+			} catch (InterruptedException e) {
+				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+			}
 
 			// Mandamos un mensaje para cerrar la sesión
 			try {
@@ -363,8 +393,7 @@ public class Cliente extends Thread {
 		} catch (InterruptedException e) {
 			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
 		}
-		System.out.println("Archivo recibido.");
-		input_sem.release();
+		System.out.println("Archivo recibido");
 	}
 
 	private void conseguirIP() {
@@ -377,62 +406,25 @@ public class Cliente extends Thread {
 		}
 	}
 
-	private void initializeFiles(String[] filenames) {
-		//Añadimos los archivos
-		files_lock.lock();
-		for(String s: filenames) {
-			files.add(new File(s));
-		}
-		for(File f:files) {
-			if(!f.canRead()) {
-				System.out.println("No se ha podido encontrar el archivo: " + f.getName());
-			}
-		}
-		files_lock.unlock();
-	}
-
-	private List<String> introducirArchivos() {
+	private List<File> introducirArchivos() {
 		// Aparte de añadir los archivos a files devuelve sus nombres para añadirlos
 		// por si la llamamos después de la inicialización
-		List<String> filenames = new ArrayList<String>();
+		List<File> filesout = new ArrayList<File>();
 		System.out.println("Introduzca los archivos de uno en uno, termine con ENTER: ");
 		String in;
 		File aux;
 		in = stdin.nextLine();
-		files_lock.lock();
 		while(!in.equals("")) {
 			aux = new File(in);
 			if(aux.canRead()) {
-				files.add(aux);
-				filenames.add(aux.getName());
+				filesout.add(aux);
 			} else {
 				System.out.println("No se ha podido encontrar el archivo: " + aux.getName());
 			}
 			in = stdin.nextLine();
 		}
-		files_lock.unlock();
-		return filenames;
+		return filesout;
 	}
 
 	
-	public void addFile(File file) {
-		
-		files_lock.lock();
-		files.add(file);
-		files_lock.unlock();
-		
-		try {
-			List<String> in = new ArrayList<String>();
-			in.add(file.getName());
-			fout.writeObject(new MensajeSubirArchivos(in));
-			fout.flush();
-		} catch (IOException e) {
-			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
-		}
-		try {
-			input_sem.acquire();
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-		}
-	}
 }

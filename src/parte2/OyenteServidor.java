@@ -60,6 +60,7 @@ public class OyenteServidor extends Thread {
 			} catch (ClassNotFoundException | IOException e) {
 				System.out.println("Problema recibiendo el mensaje en un oc: " + e.getLocalizedMessage());
 				closeAll();
+				return;
 			}
 			
 			if(m == null) {

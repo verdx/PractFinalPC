@@ -7,10 +7,8 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.locks.Lock;
-
-import mensajes.MensajeSubirArchivos;
 
 public class Receptor extends Thread {
 	
@@ -63,8 +61,7 @@ public class Receptor extends Thread {
 		} catch (IOException e) {
 			System.out.println("Problema escribiendo el archivo: " + e.getLocalizedMessage());
 		}
-		
-		cliente.addFile(path.toFile());
+		cliente.addFiles(Arrays.asList(path.toFile()) , true);
 		return;
 	}
 
