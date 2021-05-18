@@ -87,10 +87,6 @@ public class BaseDeDatos {
 			}
 			monfiles.request_write();
 			files.get(username).addAll(filenames);
-			// Pequeño hack para que sepa que se ha actualizado
-			// Si no se piensa que no se ha actualizado y reutiliza el valor
-			files.put("", null);
-			files.remove("");
 			monfiles.release_write();
 
 			System.out.println("Se ha[n] añadido " + annadidas + " archivo[s] al usuario " + username);
@@ -152,13 +148,23 @@ public class BaseDeDatos {
 	
 	public Map<String, List<String>> getFiles() {
 		monfiles.request_read();
-		// Pequeño hack para que sepa que se ha actualizado
-		// Si no se piensa que no se ha actualizado y reutiliza el valor
-		files.put("", null);
-		files.remove("");
-		Map<String, List<String>> aux = files;
+		// He tenido que hacer esta movida porque si no no se pasaban bien
+		// y al hacer el upload no funcionaba como debería
+		Map<String, List<String>> aux = new HashMap<String, List<String>>();
+		for(String s: files.keySet()) {
+			aux.put(s, new ArrayList<String>(files.get(s)));
+		}
 		monfiles.release_read();
+		printFiles(aux);
 		return aux;
+	}
+	private void printFiles(Map<String, List<String>> map) {
+		for(String user: map.keySet()) {
+			System.out.println("-" + user + ": ");
+			for(String file: map.get(user)) {
+				System.out.println("  \u2514" + file);
+			}
+		}
 	}
 	
 	class MonitorRW {

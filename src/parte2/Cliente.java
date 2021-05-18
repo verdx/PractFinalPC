@@ -225,6 +225,10 @@ public class Cliente extends Thread {
 	private void download(String filename) {
 		// Mandamos un mensaje comenzando el proceso de conexion para descargar 
 		// un archivo de otro peer
+		if(getFile(filename) != null) {
+			System.out.println("Este archivo ya esta en este cliente");
+			return;
+		}
 		try {
 			fout.writeObject(new MensajePedirFichero(filename, username));
 			fout.flush();
@@ -337,6 +341,17 @@ public class Cliente extends Thread {
 			in = stdin.nextLine();
 		}
 		return filesout;
+	}
+	
+	private File getFile(String filename) {
+		files_lock.lock();
+		for(File f: files) {
+			if(f.getName().equals(filename)) {
+				return f;
+			}
+		}
+		files_lock.unlock();
+		return null;
 	}
 
 	
