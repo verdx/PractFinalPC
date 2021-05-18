@@ -37,7 +37,13 @@ public class Servidor extends Thread {
 		// Pedimos el puerto
 		System.out.print("Puerto: ");
 		Scanner stdin = new Scanner(System.in);
-		port = Integer.parseInt(stdin.nextLine());
+		boolean puertocorr = false;
+		while(!puertocorr) try {
+			port = Integer.parseInt(stdin.nextLine());
+			puertocorr = true;
+		} catch (Exception e) {
+			System.out.println("Puerto incorrecto, pruebe de nuevo");
+		}
 		stdin.close();
 		
 

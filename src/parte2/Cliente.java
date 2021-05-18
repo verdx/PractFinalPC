@@ -12,7 +12,6 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -20,7 +19,6 @@ import mensajes.MensType;
 import mensajes.Mensaje;
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
-import mensajes.MensajeEmisorPreparadoCS;
 import mensajes.MensajeListaArchivos;
 import mensajes.MensajeListaUsuarios;
 import mensajes.MensajePedirFichero;
@@ -38,14 +36,11 @@ public class Cliente extends Thread {
 	private String myhost;
 	private String serverhost;
 	private int port;
-	private int portout;
 	
 	private String username;
 	private List<File> files;
 	
-	private Semaphore input_sem;
 	private Lock files_lock;
-	boolean exit;
 	
 	public Cliente() {
 		//Conseguimos nuestra IP
@@ -55,7 +50,7 @@ public class Cliente extends Thread {
 
 		stdin = new Scanner(System.in);	
 
-		input_sem = new Semaphore(1);
+		//input_sem = new Semaphore(1);
 		
 		files_lock = new ReentrantLock();
 	}
@@ -68,7 +63,6 @@ public class Cliente extends Thread {
 		
 		System.out.print("Port: ");
 		port = Integer.parseInt(stdin.nextLine());
-		portout = port +1;
 		
 		introducirArchivos();
 		
@@ -87,7 +81,7 @@ public class Cliente extends Thread {
 		
 		// Creamos y lanzamos el thread de escucha oyente-servidor
 		try {
-			os = new OyenteCliente(fin, username, this, input_sem);
+			os = new OyenteCliente(fin, fout, username, port + 1, myhost, files, files_lock);
 			os.start();
 		} catch(Exception e) {
 			System.out.println("Fallo de conexion con el servidor: " + e.getLocalizedMessage());
@@ -140,29 +134,27 @@ public class Cliente extends Thread {
 	}
 	
 	private void menu() {
-		exit = false;
+		boolean exit = false;
+		boolean prompt = true;
 		System.out.println("Type help for info on the commands.");
 		while(!exit) {
-			try {
-				input_sem.acquire();
-			} catch (InterruptedException e) {
-				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-			}
-			System.out.print(username + "> ");
-			input_sem.release();
+			if(prompt) System.out.print(username + "> ");
 			String[] command = stdin.nextLine().split(" ");
 			switch(command[0]) {
 			case "help":
 			case "h":
 				help();
+				prompt = true;
 				break;
 			case "users":
 			case "u":
 				users();
+				prompt = false;
 				break;
 			case "files":
 			case "f":
 				files();
+				prompt = false;
 				break;
 			case "download":
 			case "d":
@@ -171,17 +163,28 @@ public class Cliente extends Thread {
 				} else {
 					download(command[1]);
 				}
+				prompt = false;
 				break;
 			case "exit":
 			case "e":
-				exit();
+				System.out.print("Are you sure you want to leave?[y/N]> ");
+				String conf = stdin.nextLine();
+				if(conf != "y" && conf != "Y") {
+					exit = true;
+					prompt = false;
+					exit();
+				} else {
+					prompt = false;
+				}
 				break;
 			case "upload":
 			case "up":
 				upload(command);
+				prompt = false;
 				break;
 			default:
 				System.out.println("Command not recognized. Type help or h for help.");
+				prompt = true;
 			}
 		}
 		return;
@@ -189,19 +192,13 @@ public class Cliente extends Thread {
 	
 	private void help() {
 		// Se imprime el mensaje de ayuda explicando los comandos
-		try {
-			input_sem.acquire();
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-		}
 		System.out.println("[h]elp: This message.\n"
 				+ "[u]sers: List the users in the system.\n"
 				+ "[f]iles: List the available files in the system.\n"
 				+ "[d]ownload FILENAME: Download FILENAME from the system.\n"
 				+ "[up]load FILENAME: Download FILENAME from the system if given or ask for files to upload.\n"
 				+ "[e]xit: Exit the system.");
-		input_sem.release();
-	}
+		}
 	
 	private void users() {
 		// Mandamos un mensaje pidiendo la lista de usuarios que se escribirá desde el Oyente-Servidor cuando le llegue.
@@ -210,11 +207,6 @@ public class Cliente extends Thread {
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
-		}
-		try {
-			input_sem.acquire();
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
@@ -226,12 +218,7 @@ public class Cliente extends Thread {
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
-		}
-		try {
-			input_sem.acquire();
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-		}
+		}	
 	}
 	
 	private void download(String filename) {
@@ -242,11 +229,6 @@ public class Cliente extends Thread {
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
-		}
-		try {
-			input_sem.acquire(); 
-		} catch (InterruptedException e) {
-			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
 		}
 	}
 	
@@ -264,10 +246,10 @@ public class Cliente extends Thread {
 				}
 			}
 		} 
-		addFiles(filesout, false);
+		addFiles(filesout);
 	}
 	
-	public void addFiles(List<File> filesin, boolean testigo) {	
+	private void addFiles(List<File> filesin) {	
 		List<String> in = new ArrayList<String>();
 		
 		files_lock.lock();
@@ -284,117 +266,41 @@ public class Cliente extends Thread {
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
 		}
-		if(!testigo) {
-			try {
-				input_sem.acquire();
-			} catch (InterruptedException e) {
-				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-			}
-		}
+		
 	}
 
 	private void exit() {
-		// We ask for confirmation
-		System.out.print("Are you sure you want to leave?[y/N]> ");
-		String conf = stdin.nextLine();
-		if(conf != "y" && conf != "Y") {
-			exit = true;
-			
-			try {
-				input_sem.acquire();
-			} catch (InterruptedException e) {
-				System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
-			}
-
-			// Mandamos un mensaje para cerrar la sesión
-			try {
-				fout.writeObject(new MensajeCerrarConexion(username));
-				fout.flush();
-			} catch (IOException e) {
-				System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
-			}
-			try {
-				os.join();
-			} catch (InterruptedException e) {
-				System.out.println("Problema al cerrar el oyente: " + e.getLocalizedMessage());
-			}
-
-			stdin.close();
-			try {
-				fout.close();
-			} catch (IOException e) {
-				System.out.println("Problema al cerrar el canal de salida: " + e.getLocalizedMessage());
-			}
-			try {
-				fin.close();
-			} catch (IOException e) {
-				System.out.println("Problema al cerrar el canal de entrada: " + e.getLocalizedMessage());
-			}
-			try {
-				s.close();
-			} catch (IOException e) {
-				System.out.println("Problema al cerrar el socket: " + e.getLocalizedMessage());
-			}
-		}
-	}
-
-	protected void emitirArchivo(String filename, String user_receptor) {
-		File file = getFile(filename);
-		if(file == null) {
-			System.out.println("El fichero no parece existir");
-		}
-
-		boolean puerto_correcto = false;
-		Emisor emisor = null;
-
-		while(!puerto_correcto) {
-			puerto_correcto = true;
-			try {
-				emisor = new Emisor(portout, file);
-				emisor.start();
-			} catch(Exception e) {
-				puerto_correcto = false;
-			}
-			portout += 1;
-		}
-
-		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
+		// Mandamos un mensaje para cerrar la sesión
 		try {
-			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, portout - 1, user_receptor));
+			fout.writeObject(new MensajeCerrarConexion(username));
 			fout.flush();
 		} catch (IOException e) {
 			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
 		}
 		try {
-			emisor.join();
+			os.join();
 		} catch (InterruptedException e) {
-			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
+			System.out.println("Problema al cerrar el oyente: " + e.getLocalizedMessage());
 		}
 
-	}
-
-	private File getFile(String filename) {
-		files_lock.lock();
-		for(File f: files) {
-			if(f.getName().equals(filename)) {
-				return f;
-			}
-		}
-		files_lock.unlock();
-		System.out.println("No se ha encontrado el archivo.");
-		return null;
-	}
-
-	public void recibirArchivo(String myhost, int port) {
-		Receptor receptor = new Receptor(myhost, port, this);
-		receptor.start();
+		stdin.close();
 		try {
-			receptor.join();
-		} catch (InterruptedException e) {
-			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
+			fout.close();
+		} catch (IOException e) {
+			System.out.println("Problema al cerrar el canal de salida: " + e.getLocalizedMessage());
 		}
-		System.out.println("Archivo recibido");
+		try {
+			fin.close();
+		} catch (IOException e) {
+			System.out.println("Problema al cerrar el canal de entrada: " + e.getLocalizedMessage());
+		}
+		try {
+			s.close();
+		} catch (IOException e) {
+			System.out.println("Problema al cerrar el socket: " + e.getLocalizedMessage());
+		}
 	}
+
 
 	private void conseguirIP() {
 		try(final DatagramSocket socket = new DatagramSocket()){
