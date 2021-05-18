@@ -1,26 +1,33 @@
 package parte2;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.concurrent.locks.Lock;
+
+import mensajes.MensajeSubirArchivos;
 
 public class Receptor extends Thread {
 	
 
 	ObjectInputStream fin;
+	List<File> files;
 	Socket s;
 	
 	int port;
 	String host;
 	
-	public Receptor(String host, int port) {
+	Cliente cliente;
+	
+	public Receptor(String host, int port, Cliente cliente) {
 		this.host = host;
 		this.port = port;
-		
-		
+		this.cliente = cliente;
 	}
 	
 	public void run() {
@@ -29,8 +36,7 @@ public class Receptor extends Thread {
 		try {
 			s = new Socket(host, port);
 		} catch (IOException e) {
-			System.out.println("Problema en el receptor al conectarse al emisor.");
-			e.printStackTrace();
+			System.out.println("Problema en el receptor al conectarse al emisor: " + e.getLocalizedMessage());
 			return;
 		}
 		
@@ -39,8 +45,7 @@ public class Receptor extends Thread {
 		try {
 			fin = new ObjectInputStream(s.getInputStream());
 		} catch (IOException e) {
-			System.out.println("Problema al crear el stream de entrada del receptor.");
-			e.printStackTrace();
+			System.out.println("Problema al crear el stream de entrada del receptor: " + e.getLocalizedMessage());
 		}
 		
 		// Recibimos el archivo por el stream
@@ -48,8 +53,7 @@ public class Receptor extends Thread {
 		try {
 			fileabs = (FileContents) fin.readObject();
 		} catch (IOException | ClassNotFoundException e) {
-			System.out.println("Problema en el receptor al recibir el archivo");
-			e.printStackTrace();
+			System.out.println("Problema en el receptor al recibir el archivo: " + e.getLocalizedMessage());
 		}
 		
 		// Guardamos el archivo
@@ -57,9 +61,10 @@ public class Receptor extends Thread {
 		try {
 			Files.write(path, fileabs.getContents());
 		} catch (IOException e) {
-			System.out.println("Problem writing the file");
-			e.printStackTrace();
+			System.out.println("Problema escribiendo el archivo: " + e.getLocalizedMessage());
 		}
+		
+		cliente.addFile(path.toFile());
 		return;
 	}
 

@@ -2,10 +2,12 @@ package parte2;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import mensajes.Mensaje;
+import mensajes.MensajeArchivosSubidos;
 import mensajes.MensajeConfListaArchivos;
 import mensajes.MensajeConfListaUsuarios;
 import mensajes.MensajeEmisorPreparadoSC;
@@ -64,6 +66,10 @@ public class OyenteCliente extends Thread {
 					System.out.println("El archivo no existe");
 					input_sem.release();
 					break;
+				case MENSAJE_ARCHIVOS_SUBIDOS:
+					System.out.println("Se ha[n] subido correctamente " + ((MensajeArchivosSubidos) m).getCorrectos() + " archivo[s] al servidor");
+					input_sem.release();
+					break;
 				default:
 					System.out.println("Ha llegado un mensaje desconocido de tipo: " + m.getTipo());
 					break;	
@@ -80,10 +86,10 @@ public class OyenteCliente extends Thread {
 		}
 	}
 	
-	private void printFiles(Map<String, String[]> files) {
-		for(String user: files.keySet()) {
+	private void printFiles(Map<String, List<String>> map) {
+		for(String user: map.keySet()) {
 			System.out.println("-" + user + ": ");
-			for(String file: files.get(user)) {
+			for(String file: map.get(user)) {
 				System.out.println("  \u2514" + file + "\n");
 			}
 		}

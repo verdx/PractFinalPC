@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.List;
 import java.util.Map;
 
 import mensajes.Mensaje;
 import mensajes.MensajeArchivoNoExiste;
+import mensajes.MensajeArchivosSubidos;
 import mensajes.MensajeCerrarConexion;
 import mensajes.MensajeConexion;
 import mensajes.MensajeConfCerrarConexion;
@@ -19,6 +21,7 @@ import mensajes.MensajeEmisorPreparadoSC;
 import mensajes.MensajeEmitirFichero;
 import mensajes.MensajePedirFichero;
 import mensajes.MensajeUsuarioCogido;
+import mensajes.MensajeSubirArchivos;
 
 public class OyenteServidor extends Thread {
 	
@@ -26,6 +29,7 @@ public class OyenteServidor extends Thread {
 	private BaseDeDatos bd;
 	private ObjectInputStream fin;
 	private ObjectOutputStream fout;
+	private String username;
 	
 	public OyenteServidor(Socket s, BaseDeDatos bd) {
 		this.s = s;
@@ -81,6 +85,10 @@ public class OyenteServidor extends Thread {
 					break;
 				case MENSAJE_LISTA_ARCHIVOS:
 					pedirArchivos();
+					break;
+				case MENSAJE_SUBIR_ARCHIVOS:
+					addFiles(username, ((MensajeSubirArchivos) m).getFileNames());
+					break;
 				default:
 					break;
 				}
@@ -89,6 +97,18 @@ public class OyenteServidor extends Thread {
         
 	}
 	
+	private void addFiles(String username2, List<String> filenames) {
+		int annadidos = bd.addFiles(username, filenames);
+		try {
+			fout.writeObject(new MensajeArchivosSubidos(annadidos));
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Problema al enviar mensaje de confirmación de conexión: " + e.getLocalizedMessage());
+
+		}
+	}
+
+
 	private void pedirUsuarios() {
 		String[] users = bd.getUsers();
 		try {
@@ -100,7 +120,7 @@ public class OyenteServidor extends Thread {
 	}
 	
 	private void pedirArchivos() {
-		Map<String, String[]> files = bd.getFiles();
+		Map<String, List<String>> files = bd.getFiles();
 		try {
 			fout.writeObject(new MensajeConfListaArchivos(files));
 			fout.flush();
@@ -110,7 +130,8 @@ public class OyenteServidor extends Thread {
 	}
 
 
-	private void addUser(String username, String[] files) {
+	private void addUser(String username, List<String> files) {
+		this.username = username;
 		boolean annadido = bd.addUser(username, files , fin, fout);
 		if(annadido)
 			try {

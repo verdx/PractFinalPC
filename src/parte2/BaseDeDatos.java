@@ -3,8 +3,10 @@ package parte2;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.locks.Condition;
@@ -13,7 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class BaseDeDatos {
 	// Diccionario de usuarios y sus archivos y su monitor
-	Map<String, String[]> files;
+	Map<String, List<String>> files;
 	MonitorRW monfiles;
 	
 	// Diccionario de usuarios y sus streams y su monitor
@@ -25,7 +27,7 @@ public class BaseDeDatos {
 	MonitorRW monowners;
 	
 	public BaseDeDatos() {
-		files = new HashMap<String, String[]>();
+		files = new HashMap<String, List<String>>();
 		monfiles = new MonitorRW();
 		streams = new HashMap<String, Pair<ObjectInputStream, ObjectOutputStream>>();
 		monstreams = new MonitorRW();
@@ -34,7 +36,7 @@ public class BaseDeDatos {
 		
 	}
 	
-	public synchronized boolean addUser(String username, String[] filenames, ObjectInputStream in, ObjectOutputStream out) {
+	public boolean addUser(String username, List<String> filenames, ObjectInputStream in, ObjectOutputStream out) {
 		monfiles.request_read();
 		boolean ya_existe = files.containsKey(username);
 		monfiles.release_read();
@@ -66,7 +68,38 @@ public class BaseDeDatos {
 		}
 	}
 	
-	public synchronized void removeUser(String username) {
+	public int addFiles(String username, List<String> filenames) {
+		monfiles.request_read();
+		boolean existe = files.containsKey(username);
+		monfiles.release_read();
+		
+		if(!existe) {
+			return 0;
+		} else {
+			
+			int annadidas = 0; 
+			for(String s: filenames) {
+				monfiles.request_write();
+				List<String> aux = new ArrayList<String>();
+				aux.addAll(filenames);
+				aux.addAll(files.get(username));
+				files.put(username,aux);
+				monfiles.release_write();
+				
+				monowners.request_write();
+				owners.put(s, username);
+				monowners.release_write();
+				annadidas++;
+			}
+
+			System.out.println("Se ha[n] añadido " + annadidas + " archivo[s] al usuario " + username);
+			return annadidas;
+		}
+	}
+	
+	
+	
+	public void removeUser(String username) {
 		monfiles.request_write();
 		files.remove(username);
 		monfiles.release_write();
@@ -88,7 +121,7 @@ public class BaseDeDatos {
 		System.out.println("Se ha borrado al usuario: " + username);
 	}
 	
-	public synchronized String[] getUsers() {
+	public String[] getUsers() {
 		monfiles.request_read();
 		String[] users = new String[files.size()];
 		int i = 0;
@@ -101,14 +134,14 @@ public class BaseDeDatos {
 		return users;
 	}
 	
-	public synchronized ObjectOutputStream getUserFout(String user) {
+	public ObjectOutputStream getUserFout(String user) {
 		monstreams.request_read();
 		ObjectOutputStream aux = streams.get(user).second();
 		monstreams.release_read();
 		return aux;
 	}
 	
-	public synchronized String getOwner(String filename) {
+	public String getOwner(String filename) {
 		monowners.request_read();
 		String aux = owners.get(filename);
 		monowners.release_read();
@@ -116,9 +149,9 @@ public class BaseDeDatos {
 	}
 	
 	
-	public synchronized Map<String, String[]> getFiles() {
+	public Map<String, List<String>> getFiles() {
 		monfiles.request_read();
-		Map<String, String[]> aux = new HashMap<String, String[]>(files);
+		Map<String, List<String>> aux = new HashMap<String, List<String>>(files);
 		monfiles.release_read();
 		return aux;
 	}

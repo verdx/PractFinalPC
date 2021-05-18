@@ -1,11 +1,13 @@
 package mensajes;
 
+import java.util.List;
+
 public class MensajeConexion extends Mensaje {
 	
 	String username;
-	String[] files;
+	List<String> files;
 	
-	public MensajeConexion(String username, String[] files) {
+	public MensajeConexion(String username, List<String> files) {
 		tipo = MensType.MENSAJE_CONEXION;
 		this.username = username;
 		this.files = files;
@@ -15,7 +17,7 @@ public class MensajeConexion extends Mensaje {
 		return username;
 	}
 
-	public String[] getFiles() {
+	public List<String> getFiles() {
 		return files;
 	}
 }

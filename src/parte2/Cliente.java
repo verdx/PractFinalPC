@@ -10,9 +10,12 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import mensajes.MensType;
 import mensajes.Mensaje;
@@ -22,6 +25,7 @@ import mensajes.MensajeEmisorPreparadoCS;
 import mensajes.MensajeListaArchivos;
 import mensajes.MensajeListaUsuarios;
 import mensajes.MensajePedirFichero;
+import mensajes.MensajeSubirArchivos;
 
 public class Cliente extends Thread {
 	
@@ -38,9 +42,10 @@ public class Cliente extends Thread {
 	private int portout;
 	
 	private String username;
-	private List<File> files = new ArrayList<>();
+	private List<File> files;
 	
 	private Semaphore input_sem;
+	private Lock files_lock;
 	boolean exit;
 	
 	public Cliente(String[] filenames) {
@@ -53,13 +58,15 @@ public class Cliente extends Thread {
 	public Cliente() {
 		//Conseguimos nuestra IP
 		conseguirIP();
+		
+		files = new ArrayList<File>();
 
 		stdin = new Scanner(System.in);	
 
 		input_sem = new Semaphore(1);
+		
+		files_lock = new ReentrantLock();
 	}
-	
-
 	
 	public void run() {
 		
@@ -71,7 +78,7 @@ public class Cliente extends Thread {
 		port = Integer.parseInt(stdin.nextLine());
 		portout = port +1;
 		
-		pedirArchivos();
+		introducirArchivos();
 		
 		// Creamos y activamos el socket y el stream de salida
 		try {
@@ -83,6 +90,25 @@ public class Cliente extends Thread {
 			return;
 		}
 
+		// Pedimos usuarios hasta que uno no este cogido
+		registrarUsuario();
+		
+		// Creamos y lanzamos el thread de escucha oyente-servidor
+		try {
+			os = new OyenteCliente(fin, username, this, input_sem);
+			os.start();
+		} catch(Exception e) {
+			System.out.println("Fallo de conexion con el servidor: " + e.getLocalizedMessage());
+			return;
+		}
+		
+		// Entramos en el menu y pedimos comandos hasta que se salga
+		menu();
+		
+		return;
+	}
+	
+	private void registrarUsuario() {
 		boolean usuario_registrado = false;
 
 		while(!usuario_registrado) {
@@ -90,10 +116,12 @@ public class Cliente extends Thread {
 			username = stdin.nextLine();
 
 			// Mandamos el mensaje de conexion establecida con la info del cliente
-			String[] filenames = new String[files.size()];
+			List<String> filenames = new ArrayList<String>();
+			files_lock.lock();
 			for(File f: files) {
-				filenames[files.indexOf(f)] = f.getName();
+				filenames.add(f.getName());
 			}
+			files_lock.unlock();
 			try {
 				fout.writeObject(new MensajeConexion(username, filenames));
 				fout.flush();
@@ -117,20 +145,9 @@ public class Cliente extends Thread {
 				System.out.println("Usuario registrado.");
 			}
 		}
-		
-		// Creamos y lanzamos el thread de escucha oyente-servidor
-		try {
-			os = new OyenteCliente(fin, username, this, input_sem);
-			os.start();
-		} catch(Exception e) {
-			System.out.println("Fallo de conexion con el servidor: " + e.getLocalizedMessage());
-			return;
-		}
-		
-		
-		
-		
-		// Entramos en el menu y pedimos comandos hasta que se salga
+	}
+	
+	private void menu() {
 		exit = false;
 		System.out.println("Type help for info on the commands.");
 		while(!exit) {
@@ -161,6 +178,10 @@ public class Cliente extends Thread {
 			case "exit":
 			case "e":
 				exit();
+				break;
+			case "upload":
+			case "ul":
+				upload();
 				break;
 			default:
 				System.out.println("Command not recognized. Type help or h for help.");
@@ -232,6 +253,21 @@ public class Cliente extends Thread {
 		}
 	}
 	
+	private void upload() {
+		try {
+			fout.writeObject(new MensajeSubirArchivos(introducirArchivos()));
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+		}
+	}
+
+
 	private void exit() {
 		// We ask for confirmation
 		System.out.print("Are you sure you want to leave?[y/N]> ");
@@ -239,7 +275,7 @@ public class Cliente extends Thread {
 		input_sem.release();
 		if(conf != "y" && conf != "Y") {
 			exit = true;
-			
+
 			// Mandamos un mensaje para cerrar la sesión
 			try {
 				fout.writeObject(new MensajeCerrarConexion(username));
@@ -252,7 +288,7 @@ public class Cliente extends Thread {
 			} catch (InterruptedException e) {
 				System.out.println("Problema al cerrar el oyente: " + e.getLocalizedMessage());
 			}
-			
+
 			stdin.close();
 			try {
 				fout.close();
@@ -271,16 +307,16 @@ public class Cliente extends Thread {
 			}
 		}
 	}
-	
-	public void emitirArchivo(String filename, String user_receptor) {
+
+	protected void emitirArchivo(String filename, String user_receptor) {
 		File file = getFile(filename);
 		if(file == null) {
 			System.out.println("El fichero no parece existir");
 		}
-		
+
 		boolean puerto_correcto = false;
 		Emisor emisor = null;
-		
+
 		while(!puerto_correcto) {
 			puerto_correcto = true;
 			try {
@@ -291,7 +327,7 @@ public class Cliente extends Thread {
 			}
 			portout += 1;
 		}
-		
+
 		// Mandamos un mensaje para decir que estamos preparados y dar nuestra ip y puerto
 		try {
 			fout.writeObject(new MensajeEmisorPreparadoCS(myhost, portout - 1, user_receptor));
@@ -304,22 +340,23 @@ public class Cliente extends Thread {
 		} catch (InterruptedException e) {
 			System.out.println("Problema al cerrar el emisor: " + e.getLocalizedMessage());
 		}
-		
+
 	}
-	
+
 	private File getFile(String filename) {
+		files_lock.lock();
 		for(File f: files) {
 			if(f.getName().equals(filename)) {
 				return f;
 			}
 		}
+		files_lock.unlock();
 		System.out.println("No se ha encontrado el archivo.");
 		return null;
 	}
 
-
 	public void recibirArchivo(String myhost, int port) {
-		Receptor receptor = new Receptor(myhost, port);
+		Receptor receptor = new Receptor(myhost, port, this);
 		receptor.start();
 		try {
 			receptor.join();
@@ -329,7 +366,7 @@ public class Cliente extends Thread {
 		System.out.println("Archivo recibido.");
 		input_sem.release();
 	}
-	
+
 	private void conseguirIP() {
 		try(final DatagramSocket socket = new DatagramSocket()){
 			socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
@@ -339,9 +376,10 @@ public class Cliente extends Thread {
 			System.out.println("Fallo al conseguir la IP: " + e.getLocalizedMessage());
 		}
 	}
-	
+
 	private void initializeFiles(String[] filenames) {
 		//Añadimos los archivos
+		files_lock.lock();
 		for(String s: filenames) {
 			files.add(new File(s));
 		}
@@ -350,23 +388,51 @@ public class Cliente extends Thread {
 				System.out.println("No se ha podido encontrar el archivo: " + f.getName());
 			}
 		}
+		files_lock.unlock();
 	}
-	
-	private void pedirArchivos() {
+
+	private List<String> introducirArchivos() {
+		// Aparte de añadir los archivos a files devuelve sus nombres para añadirlos
+		// por si la llamamos después de la inicialización
+		List<String> filenames = new ArrayList<String>();
 		System.out.println("Introduzca los archivos de uno en uno, termine con ENTER: ");
 		String in;
 		File aux;
 		in = stdin.nextLine();
+		files_lock.lock();
 		while(!in.equals("")) {
 			aux = new File(in);
 			if(aux.canRead()) {
 				files.add(aux);
+				filenames.add(aux.getName());
 			} else {
 				System.out.println("No se ha podido encontrar el archivo: " + aux.getName());
 			}
 			in = stdin.nextLine();
 		}
+		files_lock.unlock();
+		return filenames;
 	}
+
 	
-	
+	public void addFile(File file) {
+		
+		files_lock.lock();
+		files.add(file);
+		files_lock.unlock();
+		
+		try {
+			List<String> in = new ArrayList<String>();
+			in.add(file.getName());
+			fout.writeObject(new MensajeSubirArchivos(in));
+			fout.flush();
+		} catch (IOException e) {
+			System.out.println("Problema al enviar el mensaje: " + e.getLocalizedMessage());
+		}
+		try {
+			input_sem.acquire();
+		} catch (InterruptedException e) {
+			System.out.println("Fallo al coger el semaforo de input: " + e.getLocalizedMessage());
+		}
+	}
 }
