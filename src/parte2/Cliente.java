@@ -128,8 +128,6 @@ public class Cliente extends Thread {
 		}
 		
 		
-		
-		
 		// Entramos en el menu y pedimos comandos hasta que se salga
 		exit = false;
 		System.out.println("Type help for info on the commands.");
