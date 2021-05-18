@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.locks.Lock;
@@ -48,9 +49,7 @@ public class Cliente extends Thread {
 		
 		files = new ArrayList<File>();
 
-		stdin = new Scanner(System.in);	
-
-		//input_sem = new Semaphore(1);
+		stdin = new Scanner(System.in);
 		
 		files_lock = new ReentrantLock();
 	}
@@ -64,8 +63,6 @@ public class Cliente extends Thread {
 		System.out.print("Port: ");
 		port = Integer.parseInt(stdin.nextLine());
 		
-		introducirArchivos();
-		
 		// Creamos y activamos el socket y el stream de salida
 		try {
 			s = new Socket(serverhost, port);
@@ -76,8 +73,12 @@ public class Cliente extends Thread {
 			return;
 		}
 
+		
 		// Pedimos usuarios hasta que uno no este cogido
 		registrarUsuario();
+		
+		// Pedimos los archivos de inicio
+		addFiles(introducirArchivos());
 		
 		// Creamos y lanzamos el thread de escucha oyente-servidor
 		try {
@@ -241,7 +242,11 @@ public class Cliente extends Thread {
 			filesout = new ArrayList<File>();
 			for(int i = 1; i < command.length; i++) {
 				aux = new File(command[i]);
-				if(aux.canRead()) {
+				if(!aux.canRead()) {
+					System.out.print("El archivo " + command[i] + " no existe.\n" + username + ">");
+				} else if (files.contains(aux)) {
+					System.out.print("El archivo " + command[i] + " ya está subido.\n" + username + ">");
+				} else {
 					filesout.add(aux);
 				}
 			}
@@ -250,6 +255,9 @@ public class Cliente extends Thread {
 	}
 	
 	private void addFiles(List<File> filesin) {	
+		
+		if(filesin == null || filesin.isEmpty()) return; 
+		
 		List<String> in = new ArrayList<String>();
 		
 		files_lock.lock();
@@ -257,10 +265,11 @@ public class Cliente extends Thread {
 			files.add(f);
 			in.add(f.getName());
 		}
+		Collections.sort(in);
 		files_lock.unlock();
-		
+
+		if(fout == null) System.out.println("Fallo en addFiles");
 		try {
-			
 			fout.writeObject(new MensajeSubirArchivos(in));
 			fout.flush();
 		} catch (IOException e) {
@@ -313,8 +322,6 @@ public class Cliente extends Thread {
 	}
 
 	private List<File> introducirArchivos() {
-		// Aparte de añadir los archivos a files devuelve sus nombres para añadirlos
-		// por si la llamamos después de la inicialización
 		List<File> filesout = new ArrayList<File>();
 		System.out.println("Introduzca los archivos de uno en uno, termine con ENTER: ");
 		String in;

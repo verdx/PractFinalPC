@@ -51,7 +51,8 @@ public class OyenteCliente extends Thread {
 			try {
 				m = (Mensaje) fin.readObject();
 			} catch (ClassNotFoundException | IOException e) {
-				System.out.println("Problema al recibir el mensaje :" + e.getLocalizedMessage());
+				System.out.println("Problema recibiendo el mensaje en un oc: " + e.getLocalizedMessage());
+				return;
 			}
 			
 			if(m == null) {

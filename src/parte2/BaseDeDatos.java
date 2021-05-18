@@ -5,10 +5,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -23,7 +21,7 @@ public class BaseDeDatos {
 	MonitorRW monstreams;
 	
 	// Diccionario de archivos y sus dueños y su monitor
-	Map<String, String> owners;
+	Map<String, List<String>> owners;
 	MonitorRW monowners;
 	
 	public BaseDeDatos() {
@@ -31,7 +29,7 @@ public class BaseDeDatos {
 		monfiles = new MonitorRW();
 		streams = new HashMap<String, Pair<ObjectInputStream, ObjectOutputStream>>();
 		monstreams = new MonitorRW();
-		owners = new HashMap<String, String>();
+		owners = new HashMap<String, List<String>>();
 		monowners = new MonitorRW();
 		
 	}
@@ -47,7 +45,7 @@ public class BaseDeDatos {
 
 			// Añadimos la info a files
 			monfiles.request_write();
-			files.put(username, filenames);
+			files.put(username, new ArrayList<String>(filenames));
 			monfiles.release_write();
 
 			// Añadimos la info a streams
@@ -58,7 +56,8 @@ public class BaseDeDatos {
 			// Añadimos la info a owners
 			monowners.request_write();
 			for(String s: filenames) {
-				owners.put(s, username);
+				if(!owners.containsKey(s)) owners.put(s, new ArrayList<String>());
+				owners.get(s).add(username);
 			}
 			monowners.release_write();
 
@@ -79,18 +78,20 @@ public class BaseDeDatos {
 			
 			int annadidas = 0; 
 			for(String s: filenames) {
-				monfiles.request_write();
-				List<String> aux = new ArrayList<String>();
-				aux.addAll(filenames);
-				aux.addAll(files.get(username));
-				files.put(username,aux);
-				monfiles.release_write();
-				
+				System.out.println(s);
 				monowners.request_write();
-				owners.put(s, username);
+				if(!owners.containsKey(s)) owners.put(s, new ArrayList<String>());
+				owners.get(s).add(username);
 				monowners.release_write();
 				annadidas++;
 			}
+			monfiles.request_write();
+			files.get(username).addAll(filenames);
+			// Pequeño hack para que sepa que se ha actualizado
+			// Si no se piensa que no se ha actualizado y reutiliza el valor
+			files.put("", null);
+			files.remove("");
+			monfiles.release_write();
 
 			System.out.println("Se ha[n] añadido " + annadidas + " archivo[s] al usuario " + username);
 			return annadidas;
@@ -100,23 +101,22 @@ public class BaseDeDatos {
 	
 	
 	public void removeUser(String username) {
-		monfiles.request_write();
-		files.remove(username);
-		monfiles.release_write();
+		
 		
 		monstreams.request_write();
 		streams.remove(username);
 		monstreams.release_write();
 		
 		monowners.request_write();
-		Iterator<Entry<String, String>> it = owners.entrySet().iterator();
-		while (it.hasNext())
+		for(String s: files.get(username))
 		{
-			Entry<String, String> item = it.next();
-			if(item.getValue() == username)
-				it.remove();
+			owners.get(s).remove(username);
 		}
 		monowners.release_write();
+		
+		monfiles.request_write();
+		files.remove(username);
+		monfiles.release_write();
 
 		System.out.println("Se ha borrado al usuario: " + username);
 	}
@@ -143,7 +143,8 @@ public class BaseDeDatos {
 	
 	public String getOwner(String filename) {
 		monowners.request_read();
-		String aux = owners.get(filename);
+		String aux = null;
+		if(owners.containsKey(filename)) aux = owners.get(filename).get(0);
 		monowners.release_read();
 		return aux;
 	}
@@ -151,7 +152,11 @@ public class BaseDeDatos {
 	
 	public Map<String, List<String>> getFiles() {
 		monfiles.request_read();
-		Map<String, List<String>> aux = new HashMap<String, List<String>>(files);
+		// Pequeño hack para que sepa que se ha actualizado
+		// Si no se piensa que no se ha actualizado y reutiliza el valor
+		files.put("", null);
+		files.remove("");
+		Map<String, List<String>> aux = files;
 		monfiles.release_read();
 		return aux;
 	}
